@@ -1,0 +1,12 @@
+$2 = 0xf    $3 = 0x200000022   usertrap()   #define SYS_open   15
+
+1. usertrap()
+
+2. Hodnota p->trapframe->a7:
+   0xf (15)
+   Reprezentuje cislo systemoveho volania.
+   Hodnota 15 znamena SYS_open.
+
+3. Predchadzajuci mod:
+   User mode
+   Zistene podla registra sstatus, kde bit SPP je 0.
