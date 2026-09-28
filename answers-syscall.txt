@@ -10,3 +10,33 @@ $2 = 0xf    $3 = 0x200000022   usertrap()   #define SYS_open   15
 3. Predchadzajuci mod:
    User mode
    Zistene podla registra sstatus, kde bit SPP je 0.
+
+
+
+Zapíšte inštrukciu jazyka assembly na ktorej jadro vyvolalo panic.
+
+0x80001d2a: lw a3,0(zero)
+
+why did it crash? zero = 0x0 
+
+
+Inštrukcia:
+0x80001d2a: lw a3,0(zero)
+
+Hodnota num je uložená v registri:
+a3
+
+Thread 2 hit Breakpoint 1, syscall () at kernel/syscall.c:142
+
+(gdb) print p->name
+$1 = "init", '\000' <repeats 11 times>
+
+(gdb) print myproc()->name
+$2 = "init", '\000' <repeats 11 times>
+
+(gdb) print myproc()->pid
+$3 = 1
+
+Nazov procesu: init
+PID procesu: 1
+
