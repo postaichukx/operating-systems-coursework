@@ -1,0 +1,9 @@
+1. usertrap()
+2. p->trapframe->a7 = 15 (0xf). Tato hodnota predstavuje císlo systemoveho volania SYS_open
+3. predchadzajuci bol User mode. podla bitu SPP v registri sstatus, ktory ma hodnotu 0, mal som mal 0x200000022
+4. instrukcia, na ktorej jadro vyvolalo panic: 0x80001d20: lw a3, 0(zero), hodnota num je ulozena v registri a3
+5. jadro spadlo, pretoze instrukcia lw a3, 0(zero) sa pokusila nacitat 4 bajty virtualnej adresy 0 register zero ma hodnotu 0, adresa 0 nie je namapovana, a preto vznikol load page fault (scause=0xd, stval=0x0)
+6. (gdb) print p->name     $1 = "init", '\000' <repeats 11 times>
+(gdb) print p->pid         $2 = 1
+nazov procesu bol init a jeho pid=1
+
