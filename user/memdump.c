@@ -61,5 +61,93 @@ void
 memdump(char *fmt, char *data, int len)
 {
   // Your code here.  `data` holds `len` valid bytes.
+  int offset = 0;
+
+  for (int i = 0; fmt[i] != '\0'; i++) {
+    switch (fmt[i]) {
+    case 'c': {
+      if (offset + 1 <= len) {
+        printf("%c\n", data[offset]);
+        offset++;
+      } else {
+          printf("memdump: not enough data for 'c'\n");
+          return;
+        }
+      break;
+    }
+
+    case 'h': {
+      short val;
+      if (offset + 2 <= len) {
+        memmove(&val, data + offset, sizeof(val));
+        printf("%d\n", val);
+        offset += 2;
+      } else {
+          printf("memdump: not enough data for 'h'\n");
+          return;
+      }
+      break;
+    }
+
+    case 'i': {
+      int val;
+      if(offset+4<=len){
+        memmove(&val, data+offset, sizeof(val));
+        printf("%d\n",val);
+        offset +=4;
+      }
+      else{
+        printf("memdump: not enough data for 'i'\n");
+        return;
+      }
+
+      break;
+    }
+
+    case 'p': {
+      if(offset+8 <= len){
+        long int val;
+        memmove(&val, data+offset, sizeof(val));
+        printf("%lx\n",val);
+        offset+=8;
+      }
+      else{
+        printf("memdump: not enough data for 'p'\n");
+        return;
+      }
+
+      break;
+    }
+
+    case 'S': {
+      while(offset < len && data[offset] != '\0'){
+        printf("%c", data[offset]);
+        offset++;
+      }
+      printf("\n");
+
+      break;
+    }
+
+    case 's': {
+      char *ptr;
+      if(offset+8 <= len){
+        memcpy(&ptr, data + offset, sizeof(ptr));
+        printf("%s\n", ptr);
+      }
+      else{
+        printf("memdump: not enough data for 's'\n");
+        return;
+      }
+      offset += 8;
+      break;
+    }
+
+    default: {
+      printf("memdump: unknown format '%c'\n", fmt[i]);
+      return;
+    }
+    }
+  }
 
 }
