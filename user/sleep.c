@@ -13,6 +13,7 @@ main(int argc, char *argv[])
   }
 
   int ticks = atoi(argv[1]);
+  printf("na cvilu(%d tikov) sa pozastavi system\n", ticks);
   pause(ticks);
 
   exit(0);
