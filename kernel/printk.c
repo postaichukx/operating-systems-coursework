@@ -150,3 +150,25 @@ printkinit(void)
 {
   initlock(&pr.lock, "pr");
 }
+
+void 
+backtrace(  ){
+  printk("backetrace:\n");
+  uint64* fp = (uint64*)r_fp();
+
+  while( PGROUNDUP((uint64)fp) == PGROUNDUP(r_fp()) ){
+    
+    uint64* ra = (uint64*)(fp[-1]); //navratova adresa
+    fp = (uint64*)(fp[-2]); //ptr na predosly ramec
+
+    printk("%p\n", (void*) ra);
+}
+  
+  
+  
+
+}
+
+
+
+
