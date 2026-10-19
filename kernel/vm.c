@@ -289,39 +289,44 @@ uvmfree(pagetable_t pagetable, uint64 sz)
   freewalk(pagetable);
 }
 
-// Given a parent process's page table, copy
-// its memory into a child's page table.
-// Copies both the page table and the
-// physical memory.
-// returns 0 on success, -1 on failure.
-// frees any allocated pages on failure.
+// Share physical pages between parent and child.
+// Mark originally writable mappings as copy-on-write.
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for (i = 0; i < sz; i += PGSIZE) {
-    if ((pte = walk(old, i, 0)) == 0)
-      continue; // page table entry hasn't been allocated
+    pte = walk(old, i, 0);
+    if (pte == 0)
+      continue;
+
     if ((*pte & PTE_V) == 0)
-      continue; // physical page hasn't been allocated
+      continue;
+
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if ((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char *)pa, PGSIZE);
-    if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0) {
-      kfree(mem);
-      goto err;
+
+    if (*pte & PTE_W) {
+      *pte &= ~PTE_W;
+      *pte |= PTE_COW;
     }
+
+    flags = PTE_FLAGS(*pte);
+
+    if (mappages(new, i, PGSIZE, pa, flags) != 0)
+      goto err;
+
+    kaddref((void *)pa);
   }
+
+  sfence_vma();
   return 0;
 
 err:
   uvmunmap(new, 0, i / PGSIZE, 1);
+  sfence_vma();
   return -1;
 }
 
@@ -360,6 +365,15 @@ copyout(pagetable_t pagetable, uint64 psz, uint64 dstva, char *src, uint64 len)
     }
 
     pte = walk(pagetable, va0, 0);
+
+    if (*pte & PTE_COW) {
+      pa0 = vmfault(pagetable, psz, va0, 0);
+      if (pa0 == 0)
+        return -1;
+
+      pte = walk(pagetable, va0, 0);
+    }
+
     // forbid copyout over read-only user text pages.
     if ((*pte & PTE_W) == 0)
       return -1;
@@ -451,29 +465,58 @@ copyinstr(pagetable_t pagetable, uint64 psz, char *dst, uint64 srcva,
   }
 }
 
-// allocate and map user memory if process is referencing a page
-// that was lazily allocated in sys_sbrk().
-// returns 0 if va is invalid or already mapped, or if
-// out of physical memory, and physical address if successful.
+// Handle lazy allocation and writes to copy-on-write pages.
+// Return the physical page address on success, or 0 on failure.
 uint64
 vmfault(pagetable_t pagetable, uint64 psz, uint64 va, int read)
 {
-  uint64 mem;
+  uint64 mem, pa;
+  pte_t *pte;
+  uint flags;
 
-  if (va >= psz)
+  if (va >= psz || va >= MAXVA)
     return 0;
+
   va = PGROUNDDOWN(va);
-  if (ismapped(pagetable, va)) {
-    return 0;
+  pte = walk(pagetable, va, 0);
+
+  if (pte != 0 && (*pte & PTE_V)) {
+    if (read || (*pte & PTE_U) == 0 || (*pte & PTE_COW) == 0)
+      return 0;
+
+    pa = PTE2PA(*pte);
+
+    mem = (uint64)kalloc();
+    if (mem == 0)
+      return 0;
+
+    memmove((void *)mem, (void *)pa, PGSIZE);
+
+    flags = PTE_FLAGS(*pte);
+    flags |= PTE_W;
+    flags &= ~PTE_COW;
+
+    *pte = PA2PTE(mem) | flags;
+    sfence_vma();
+
+    kfree((void *)pa);
+
+    return mem;
   }
+
   mem = (uint64)kalloc();
   if (mem == 0)
     return 0;
+
   memset((void *)mem, 0, PGSIZE);
-  if (mappages(pagetable, va, PGSIZE, mem, PTE_W | PTE_U | PTE_R) != 0) {
+
+  if (mappages(pagetable, va, PGSIZE, mem,
+               PTE_W | PTE_U | PTE_R) != 0) {
     kfree((void *)mem);
     return 0;
   }
+
+  sfence_vma();
   return mem;
 }
 
