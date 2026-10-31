@@ -1,0 +1,5 @@
+vytvorí 95 PTE pre superstránky: 32 pre oblasť PLIC
+(64 MiB) a 63 pre zarovnanú časť pamäte jadra
+(od 0x80200000 do 0x88000000) každá 2 MiB superstránka nahradí
+512 bežných 4 KiB mapovaní a ušetrí jednu 4 KiB stránku tabuľky
+najnižšej úrovne
