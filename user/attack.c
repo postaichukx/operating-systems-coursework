@@ -1,36 +1,42 @@
 #include "kernel/types.h"
-#include "kernel/fcntl.h"
 #include "user/user.h"
 #include "kernel/riscv.h"
-#define PGSIZE 4096
+
 #define DATASIZE (64 * PGSIZE)
 #define MSG "Here it is: "
 
 int
 main(int argc, char *argv[])
 {
-  char* data = sbrk(DATASIZE);
-  if ( data == (char *)-1 ) { exit(1); }
-  for ( int i = 0; i <= DATASIZE - strlen(MSG); i++ ){
-    if ( memcmp(data + i, MSG, strlen(MSG)) == 0 ){
-      char* start = data + i + strlen(MSG);
+  char *data = sbrk(DATASIZE);
+  int marker_len = sizeof(MSG) - 1;
 
-      if( (start[0] >= 'A' && start[0] <= 'Z') ||
-          (start[0] >= 'a' && start[0] <= 'z') ||
-          (start[0] >= '0' && start[0] <= '9') ) {
-        int page_offset = 32 + (unsigned char)start[0];
-        uint64 offset = (uint64)(data + i) % PGSIZE;
-        if (offset == page_offset){ 
-	  for ( int j = 1; (start + j) < (data + DATASIZE); j++){
-            if( start[j] == '\0' ) {                                                       
-              write(1, start, j );
-              printf("\n");
-              exit(0);
-            }
-          }
-        }
+  if (data == (char *)-1)
+    exit(1);
+
+  for (int i = 0; i < DATASIZE - marker_len; i++) {
+    if (memcmp(data + i, MSG, marker_len) != 0)
+      continue;
+
+    char *secret = data + i + marker_len;
+    unsigned char first = secret[0];
+    if (!((first >= 'A' && first <= 'Z') ||
+          (first >= 'a' && first <= 'z') ||
+          (first >= '0' && first <= '9')))
+      continue;
+
+    // secret.c places the marker at an offset derived from the first byte.
+    if ((uint64)(data + i) % PGSIZE != 32 + first)
+      continue;
+
+    for (int j = 0; secret + j < data + DATASIZE; j++) {
+      if (secret[j] == 0) {
+        write(1, secret, j);
+        write(1, "\n", 1);
+        exit(0);
       }
     }
   }
+
   exit(1);
 }

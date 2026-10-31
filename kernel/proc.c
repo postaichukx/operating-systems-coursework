@@ -163,6 +163,8 @@ freeproc(struct proc *p)
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
+  p->sandbox_mask = 0;
+  p->sandbox_path[0] = 0;
   p->name[0] = 0;
   p->chan = 0;
   p->killed = 0;
@@ -278,7 +280,7 @@ kfork(void)
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
   np->sandbox_mask = p->sandbox_mask;
-  safestrcpy(np->path, p->path, MAXPATH);
+  safestrcpy(np->sandbox_path, p->sandbox_path, MAXPATH);
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
