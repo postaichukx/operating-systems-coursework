@@ -8,6 +8,8 @@
 #include "proc.h"
 #include "fs.h"
 
+
+
 /*
  * the kernel's page table.
  */
@@ -165,6 +167,7 @@ vmprint_level(pagetable_t pagetable, int level, uint64 va_prefix)
 
     printk("%p: pte %p pa %p", (void*)va, (void*)pte, (void*)PTE2PA(pte));
 
+    if ( pte & (PTE_R | PTE_W | PTE_X) ){ printk(" "); }
     if (pte & PTE_R)
       printk("R");
     if (pte & PTE_W)
@@ -173,6 +176,8 @@ vmprint_level(pagetable_t pagetable, int level, uint64 va_prefix)
       printk("X");
     if (pte & PTE_U)
       printk("U");
+
+    if ( PTE_LEAF(pte) && level == 1 ){ printk("[superpage 2 MiB]"); }
 
     printk("\n");
 
@@ -199,8 +204,23 @@ vmprint(pagetable_t pagetable)
 void
 kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 {
-  if (mappages(kpgtbl, va, sz, pa, perm) != 0)
-    panic("kvmmap");
+  while (sz > 0) {
+    uint64 step;
+
+    if (va % SUPERPGSIZE == 0 && pa % SUPERPGSIZE == 0 &&
+        sz >= SUPERPGSIZE) {
+      step = SUPERPGSIZE;
+      if (mappages2(kpgtbl, va, step, pa, perm) != 0)
+        panic("kvmmap");
+        } else {
+          step = PGSIZE;
+          if (mappages(kpgtbl, va, step, pa, perm) != 0)
+            panic("kvmmap");
+        }
+    va += step;
+    pa += step;
+    sz -= step;
+  }
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
@@ -236,6 +256,55 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       break;
     a += PGSIZE;
     pa += PGSIZE;
+  }
+  return 0;
+}
+
+
+int
+mappages2(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+{
+  uint64 a, last;
+  pagetable_t next;
+  pte_t *pte;
+
+  if (va % SUPERPGSIZE != 0 || pa % SUPERPGSIZE != 0)
+    panic("mappages2: address not aligned");
+
+  if (size % SUPERPGSIZE != 0)
+    panic("mappages2: size not aligned");
+
+  if (size == 0)
+    panic("mappages2: size");
+
+  a = va;
+  last = va + size - SUPERPGSIZE;
+  for (;;) {
+    if (a >= MAXVA)
+      panic("mappages2: va");
+
+    pte = &pagetable[PX(2, a)];
+    if (*pte & PTE_V) {
+      if (PTE_LEAF(*pte))
+        panic("mappages2: remap");
+      next = (pagetable_t)PTE2PA(*pte);
+    } else {
+      next = (pagetable_t)kalloc();
+      if (next == 0)
+        return -1;
+      memset(next, 0, PGSIZE);
+      *pte = PA2PTE(next) | PTE_V;
+    }
+
+    pte = &next[PX(1, a)];
+    if (*pte & PTE_V)
+      panic("mappages2: remap");
+    *pte = PA2PTE(pa) | perm | PTE_V;
+
+    if (a == last)
+      break;
+    a += SUPERPGSIZE;
+    pa += SUPERPGSIZE;
   }
   return 0;
 }
